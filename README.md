@@ -93,6 +93,34 @@ The follow-up run scaled the task core from 56 → **500 correctness-filtered in
 
 **Arm 2 complete** — trained, scored, and domain-evaluated under a $9.31 workspace cap (trimmed data as noted above). All three checkpoints now have full v2 measurements.
 
+## The collapse probe: outcome-only at 4× volume
+
+The follow-up that decides the headline: arm3 = the collapse-risk composition (zero reasoning targets, pure ground-truth answers) scaled from 500 → **1,960 task instances** (4× arm1, 47× the original 56-row pilot), plus the same 5,000 grounding rows — 6,960 rows, same LoRA config, same one epoch. If the Crusoe collapse is a data-volume phenomenon at LoRA scale, it shows up here.
+
+**It did not.**
+
+| Level | arm3 (4× outcome-only) | base | arm1 (1× outcome-only) |
+|---|---|---|---|
+| xhigh | **0.912 / 63t** | 0.882 / 65t | 0.926 / 56t |
+| medium | 0.882 / 48t | 0.882 / 48t | 0.882 / 47t |
+| low | **0.941 / 42t** | 0.897 / 45t | 0.956 / 44t |
+| **Verdict** | **HEALTHY** | flat | healthy |
+
+- **The dial survived 4× outcome-only volume** — a mild Pareto improvement over base again (accuracy up at xhigh/low, tokens down at xhigh/low).
+- **The first faint gradient signal:** low-effort empty thinking traces moved **0% → 6%** (arm1 at 1×: 0% everywhere). Nowhere near the 50% collapse threshold, but it's the first quantitative whisper that outcome-only volume starts thinning traces at low effort — the direction the collapse hypothesis predicts.
+- **Held-out recovery validity exposed composition, not volume:** arm3 diagnosed 1.00 at every level but its recovery validity at low effort (0.45) is the weakest cell in the whole four-model matrix — while arm2 (reasoning-mixed) holds 0.65 there and 1.00 at xhigh. Outcome-only training teaches the model to *name* faults but not to *fix* them; diagnosis doesn't need traces, recovery does.
+
+**Final matrix (held-out, leak-audited, recovery validity xhigh/med/low):**
+
+| | xhigh | med | low |
+|---|---|---|---|
+| Base | 0.70 | 0.70 | 0.60 |
+| arm1 (outcome 1×) | 0.60 | 0.65 | 0.65 |
+| arm2 (reasoning-mixed) | **1.00** | 0.80 | 0.65 |
+| arm3 (outcome 4×) | 0.65 | 0.60 | **0.45** |
+
+Three-way conclusion: (1) LoRA-scale SFT does not collapse the effort dial at any tested volume or composition; (2) the 6% low-effort thinning marks where to look next (higher epochs, higher rank, full fine-tuning); (3) **composition matched to task is the dominant lever for recovery quality** — arm2's win is the study's strongest practical result, and arm3's 0.45 is its cautionary tale.
+
 ## Quickstart
 
 ```bash
