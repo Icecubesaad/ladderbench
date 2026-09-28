@@ -35,6 +35,7 @@ MODEL_ID = "unsloth/Qwen3.8-27B"  # ungated mirror of Qwen/Qwen3.8-27B
 APP_NAME = "ladder"
 CACHE = "/cache"
 LOCAL_PKG = str(Path(__file__).resolve().parent / "ladderbench")
+LOCAL_RL = str(Path(__file__).resolve().parent / "ladder_rl")
 GPU = "H200"
 SEED = 3407
 
@@ -347,8 +348,12 @@ def train_cli(arm: str, epochs: int = 3, max_rows: int = 0):
 
 
 @app.function(image=score_image, gpu=GPU, volumes={CACHE: vol}, timeout=7200)
-def score_model(model_key: str, base_key: str = "") -> dict:
+def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
     import io
+    import os
+
+    if hf_token:  # gated repos (e.g. the ThinkingCap control)
+        os.environ["HF_TOKEN"] = hf_token
 
     import matplotlib
     matplotlib.use("Agg")
@@ -440,8 +445,9 @@ def score_model(model_key: str, base_key: str = "") -> dict:
 
 
 @app.local_entrypoint()
-def score_cli(model_key: str, base: str = "", out: str = "out/run.json"):
-    result = score_model.remote(model_key, base)
+def score_cli(model_key: str, base: str = "", out: str = "out/run.json",
+              hf_token: str = ""):
+    result = score_model.remote(model_key, base, hf_token)
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result["report"], indent=2), encoding="utf-8")
@@ -535,3 +541,76 @@ def domain_cli(models: str = "base,arm1,arm2", out: str = "out/domain_eval.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"domain eval -> {out_path}")
+
+
+# ------------------------------------------------------- LadderRL / GRPO ----
+
+grpo_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("torch", "torchvision", "pillow", "transformers>=5.17",
+                 "trl", "peft", "datasets", "accelerate", "vllm>=0.11.0",
+                 "huggingface_hub")
+    .env(ENV)
+    .add_local_dir(LOCAL_PKG, "/root/ladderbench")
+    .add_local_dir(LOCAL_RL, "/root/ladder_rl")
+)
+
+
+@app.function(image=grpo_image, gpu=GPU, volumes={CACHE: vol}, timeout=21600)
+def run_grpo(smoke: bool = False, steps: int = 0, max_prompts: int = 0,
+             effort: str = "medium", group_n: int = 4,
+             lambda_think: float = 0.3, use_vllm: bool = False) -> dict:
+    from ladder_rl.train_grpo import train
+
+    overrides = {
+        "max_steps": steps or None,
+        "max_prompts": max_prompts or None,
+        "effort": effort,
+        "num_generations": group_n,
+        "lambda_think": lambda_think,
+        "use_vllm": use_vllm,
+    }
+    result = train(cache=CACHE, model_id=MODEL_ID, smoke=smoke,
+                   overrides=overrides)
+    vol.commit()
+    return result
+
+
+@app.local_entrypoint()
+def grpo_cli(smoke: bool = False, steps: int = 0, max_prompts: int = 0,
+             effort: str = "medium", group_n: int = 4,
+             lambda_think: float = 0.3, use_vllm: bool = False,
+             out: str = "out/grpo.json"):
+    result = run_grpo.remote(smoke=smoke, steps=steps, max_prompts=max_prompts,
+                             effort=effort, group_n=group_n,
+                             lambda_think=lambda_think, use_vllm=use_vllm)
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(json.dumps(result, indent=2))
+
+
+@app.function(image=grpo_image, timeout=600)
+def trl_probe() -> dict:
+    """Free CPU probe: print the exact installed TRL GRPO API so train_grpo
+    matches reality instead of my guesses."""
+    import inspect
+
+    import trl
+    from trl import GRPOConfig, GRPOTrainer
+
+    return {
+        "trl_version": trl.__version__,
+        "grpo_config_fields": sorted(
+            f for f in GRPOConfig.__dataclass_fields__
+            if any(k in f for k in ("prompt", "completion", "generation",
+                                    "chat", "effort", "vllm", "beta",
+                                    "num_gen", "max_")))
+        or sorted(GRPOConfig.__dataclass_fields__)[:80],
+        "trainer_init": str(inspect.signature(GRPOTrainer.__init__))[:600],
+    }
+
+
+@app.local_entrypoint()
+def trl_probe_cli():
+    print(json.dumps(trl_probe.remote(), indent=2))
