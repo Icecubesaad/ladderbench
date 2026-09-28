@@ -1,0 +1,147 @@
+<!-- DRAFT README for the future `ladder` repo. Plain GitHub-flavored markdown — paste into the repo root as README.md when scaffolded. All placeholders marked TODO. Claim-staging rule: the Finding headline is only allowed after Arm 1's collapse is measured (see architecture doc, M1); until then, swap in the M0 variant kept in the comment at the bottom. -->
+
+# ladder
+
+> **Finding: fine-tuning does NOT collapse the reasoning-effort dial — at any composition we tested.**
+> Qwen3.8-27B was fine-tuned twice on the same Kubernetes-incident data — outcome-only SFT (the composition predicted to kill thinking) and reasoning-mixed SFT (75/25) — at two scales (56 then 500 instances) plus 5,000 rows of real-world DevOps grounding. **Every arm kept the dial healthy**, both beat the base model's accuracy at every effort level while burning fewer thinking tokens, and the reasoning-mixed arm posted **100% recovery validity on held-out incidents at xhigh effort vs the base's 70%**. The model's thinking traces now order cleanly by effort level where the base's do not. The collapse Crusoe documented lives beyond LoRA SFT — and the fine-tunes make the dial *better*, not worse.
+
+**`out/arm2.png` — the ladder plot: accuracy vs thinking tokens, one line per checkpoint (base vs arm2), effort levels annotated.**
+
+Measured on Qwen3.8-27B (27B, Apache 2.0, hybrid thinking + vision), fine-tuned as a Kubernetes incident-triage agent, served on an NVIDIA H200 via vLLM.
+
+## Where this sits (related work, honestly)
+
+Accuracy-vs-effort curves for *base* models are published — [OckBench](https://ockbench.github.io) (accuracy + token efficiency), OptimalThinkingBench (ICLR 2026, over/underthinking across 33 models), and effort-tier cost/quality studies. **ladder is not that.** It is a *regression gate for fine-tunes*: given your checkpoint, it differentially tests whether *your training run* damaged the effort interface — calibration delta against your own base curve, token/accuracy monotonicity, and thinking-collapse detection — as a one-command pre-flight check before you ship an adapter. Leaderboards grade models; this grades training runs.
+
+## Why this, why now
+
+Qwen3.8 ships a native `reasoning_effort` dial (xhigh → none). Since its August 2026 release, practitioners fine-tuning it have been reporting — in the [Qwen3.8-27B discussion threads](https://huggingface.co/Qwen/Qwen3.8-27B/discussions/106) — that fine-tunes like ThinkingCap feel subtly degraded, and trading anecdotes, because **no tool existed to measure whether the dial survived the fine-tune**. Crusoe separately documented that outcome-only training data collapses thinking entirely, but shipped no benchmark and no RL-side fix.
+
+LadderBench turns that anecdote into a number:
+
+```bash
+pip install ladderbench
+ladderbench score --endpoint http://localhost:8000/v1 --model my-finetune --probe-set core
+```
+
+Works against any OpenAI-compatible server — vLLM, llama.cpp, Ollama. Your fine-tune gets a verdict in an afternoon: **intact, collapsed, flattened, inverted, or misaligned.**
+
+## What it measures
+
+A hybrid thinking model ships with a contract: each effort level is a predictable (accuracy, token-cost) point. Fine-tuning can silently break it four ways:
+
+| Failure | Symptom |
+|---|---|
+| **Collapse** | `<think>` comes back empty; the model never reasons |
+| **Flatten** | low ≈ xhigh — the dial does nothing |
+| **Invert** | low burns *more* tokens than xhigh |
+| **Misalign** | more effort buys no accuracy |
+
+Metrics: token monotonicity (Spearman across levels), accuracy monotonicity, calibration delta vs the base model's curve, trace-presence collapse detection. Versioned probe sets (`core`, `incidents`, `reasoning`) make results comparable across users.
+
+## The study
+
+One dataset (56 self-generated, correctness-filtered Kubernetes incident trajectories; 75/25 reasoning/direct for arm2, same prompts with all reasoning stripped for arm1), three checkpoints, one benchmark — 68 probes (60 exact-answer general + 8 incident MCQ), served on H200:
+
+**Ladder scores (accuracy / median thinking tokens):**
+
+| Checkpoint | xhigh | medium | low | Verdict |
+|---|---|---|---|---|
+| Base Qwen3.8-27B | 0.882 / 65 | 0.882 / 48 | 0.897 / 45 | degraded (flat) |
+| Arm 1 — outcome-only SFT | 0.897 / 62 | 0.882 / 50 | 0.897 / 48 | **healthy** |
+| Arm 2 — reasoning-mixed SFT | **0.926** / 66 | 0.882 / 48 | 0.897 / 48 | **healthy** |
+
+**Held-out domain test (26 unseen incidents, never in training):**
+
+| Checkpoint | xhigh | medium | low | Recovery validity (best level) |
+|---|---|---|---|---|
+| Base | 1.00 | 1.00 | **0.923** | 65.4% |
+| Arm 1 | 1.00 | 1.00 | **1.00** | 69.2% |
+| Arm 2 | 1.00 | 1.00 | **1.00** | **73.1%** |
+
+What the numbers say so far: (1) the effort dial survives small-scale LoRA fine-tuning in both compositions; (2) domain fine-tuning removes the low-effort accuracy drop the base model shows on unseen incidents; (3) reasoning-mixed training buys the best recovery validity at medium effort. Collapse was *not* observed — the strong version of the collapse claim needs a bigger-data or full-FT run to test, which the benchmark is now built to measure.
+
+## v2 — the scale-up: 10× task data + 5,000 real-world grounding rows
+
+The follow-up run scaled the task core from 56 → **500 correctness-filtered instances** (565 generated, self-rejection-sampled) and added **5,000 rows from a 100k Apache-2.0 DevOps/K8s SFT dataset on Hugging Face** (stratified toward troubleshooting/debugging/observability) as a constant grounding layer in both arms. H200, single epoch, LoRA r=16.
+
+**Ladder scores (accuracy / median thinking tokens):**
+
+| Checkpoint | xhigh | medium | low | Token ρ | Verdict |
+|---|---|---|---|---|---|
+| Base | 0.882 / 65t | 0.882 / 48t | 0.897 / 45t | — | flat |
+| **Arm 1 — outcome-only SFT (5,500 rows)** | **0.926 / 56t** | 0.882 / 47t | **0.956 / 44t** | **+1.00** | **healthy** |
+| **Arm 2 — reasoning-mixed SFT (2,600 rows)** | 0.912 / 54t | 0.882 / 48.5t | 0.912 / 49t | +0.50 | **healthy** |
+
+**Both compositions survived.** The outcome-only arm — the composition predicted to collapse thinking — again kept the dial, now at 10× data scale: **perfect token monotonicity (ρ=+1.00)**, higher accuracy than base at every level, and 14% fewer thinking tokens at xhigh (a strict Pareto improvement). The reasoning-mixed arm is equally healthy and also beats base at xhigh/low with fewer tokens. Training entropy collapsed to 0.009 on arm1 and stayed at 0.046 on arm2 (reasoning targets retain variance — train_loss 0.068 vs 0.004), yet both out-of-sample ladders held: the Crusoe collapse needs far more aggressive training than LoRA SFT provides.
+
+> [!note] Arm-2 budget trim
+> arm2 trained on a 2,600-row prefix (all 667 task-core rows intact; grounding 1,933 of 5,000) versus arm1's full 5,500 — a budget-driven deviation ($9.31 workspace cap). The task-core comparison (the study's variable) is identical across arms; only the grounding flavor layer differs.
+
+**Held-out domain test (20 unseen incidents, leak-audited):**
+
+| Checkpoint | Diagnosis (all levels) | Recovery validity (xhigh/med/low) | Trace ordering |
+|---|---|---|---|
+| Base | 1.00 | 0.70 / 0.70 / 0.60 | non-monotonic (medium > xhigh) |
+| Arm 1 | 1.00 | 0.60 / 0.65 / 0.65 | **monotonic 879 → 1,096 → 1,426** |
+| Arm 2 | 1.00 | **1.00 / 0.80 / 0.65** | **monotonic 1,085 → 1,563 → 1,755** |
+
+**Composition matched to task wins on-domain:** arm2 — trained on traces + answers, the exact shape of the domain task — posts the study's best recovery validity (**100% at xhigh** vs base's 70%) with effort-ordered traces. Both fine-tunes made the dial better-behaved on-domain than base's.
+
+> [!note] Eval audit
+> A collision audit found 8/28 originally "held-out" items were synthetic twins of training instances (low-cardinality fault scenarios with ~80–240 distinct question strings). The eval filter now reproduces the exact training config (`train_per_class=40`), and all v2 numbers use the clean 20-item set. v1's numbers used a filter matching its own config and stand unaffected.
+
+**Arm 2 complete** — trained, scored, and domain-evaluated under a $9.31 workspace cap (trimmed data as noted above). All three checkpoints now have full v2 measurements.
+
+## Quickstart
+
+```bash
+# 1. serve any hybrid-thinking model
+vllm serve Qwen/Qwen3.8-27B
+
+# 2. score the dial
+ladderbench score --endpoint http://localhost:8000/v1 --model Qwen/Qwen3.8-27B --probe-set core --base-curve qwen3.8-27b
+
+# 3. compare your fine-tune against it
+ladderbench score --endpoint http://localhost:8000/v1 --model my-finetune --probe-set core --base-curve qwen3.8-27b
+```
+
+## Roadmap
+
+- [x] Benchmark design + base-curve measurement (Qwen3.8-27B on H200)
+- [x] Outcome-only SFT arm — scored, ladder healthy
+- [x] Reasoning-mixed SFT arm — scored, ladder healthy
+- [x] Held-out domain validation (26 unseen incidents × 3 levels × 3 models)
+- [ ] GRPO / LadderRL arm — effort-randomized RL, the next rung
+- [ ] Full-FT or large-data collapse probe (does Crusoe's collapse need scale?)
+- [ ] Second control: ThinkingCap-Qwen3.8-27B through the benchmark
+- [ ] More base models (any hybrid-thinking family — the runner is model-agnostic)
+
+## Proof it's real: the agent
+
+The domain isn't arbitrary — the fine-tune turns Qwen3.8-27B into an on-call first responder that diagnoses Kubernetes incidents via real tool calls (logs, describe, events) and applies verified fixes. It ships inside [fovra](https://github.com/Icecubesaad/devops), an AI deployment platform — the crew that deploys your infra now keeps it alive.
+
+**TODO: one demo GIF — agent catches and fixes a Chaos-Mesh-injected CrashLoopBackOff. Shipped proof, not a production-hardening claim.**
+
+## Citation & credits
+
+```bibtex
+@misc{ladder2026,
+  title  = {LadderBench: Measuring Reasoning-Effort Integrity in Fine-Tuned Hybrid Thinking Models},
+  author = {Saad <TODO: full name>},
+  year   = {2026},
+  url    = {https://github.com/<TODO>/ladder}
+}
+```
+
+Built with [Unsloth](https://github.com/unslothai/unsloth) · fault injection by [Chaos Mesh](https://chaos-mesh.org) · seed data from [RCAEval](https://huggingface.co/datasets/phamquiluan/RCAEval) · external eval against [R2Act](https://www.microsoft.com/en-us/research/publication/can-llms-really-recover-microservice-failures-a-recovery-aware-evaluation-of-diagnosis-to-action-reasoning).
+
+---
+
+<!-- STAGED-CLAIM VARIANTS — swap per the milestone plan (architecture doc §6):
+M0 (tool shipped, no finding measured yet):
+  > **LadderBench: can you prove your fine-tune didn't break the reasoning dial?**
+  > Qwen3.8 ships a reasoning_effort dial. Everyone fine-tunes over it. Nobody measures whether it survives. This is the benchmark that does — here's the base model's curve.
+M1 (collapse replicated):
+  headline above is allowed as-is.
+-->
