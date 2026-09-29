@@ -121,6 +121,25 @@ The follow-up that decides the headline: arm3 = the collapse-risk composition (z
 
 Three-way conclusion: (1) LoRA-scale SFT does not collapse the effort dial at any tested volume or composition; (2) the 6% low-effort thinning marks where to look next (higher epochs, higher rank, full fine-tuning); (3) **composition matched to task is the dominant lever for recovery quality** — arm2's win is the study's strongest practical result, and arm3's 0.45 is its cautionary tale.
 
+## External validation: LadderBench flags ThinkingCap — DEGRADED
+
+The benchmark's first third-party target: BottleCap AI's **ThinkingCap-Qwen3.8-27B**, the fine-tune users in the Qwen HF discussions suspected "felt dumber" — with no way to measure why. Scored against the same base curve:
+
+| Level | ThinkingCap acc / tokens | Base acc / tokens | Δ tokens |
+|---|---|---|---|
+| xhigh | 0.882 / **33.5t** | 0.882 / 65t | **−31.5t (−48%)** |
+| medium | 0.897 / 39.5t | 0.882 / 48t | −8t |
+| low | 0.926 / 40.5t | 0.897 / 45t | −4.5t |
+
+**Verdict: DEGRADED — with both findings at maximum severity:**
+- `inverted dial: tokens vs effort ρ = −1.00` — xhigh emits *fewer* thinking tokens than low; asking for maximum thinking gives the *least* thinking.
+- `misaligned: accuracy vs effort ρ = −1.00` — accuracy *rises* as effort *falls* (0.882 → 0.926); thinking harder actively hurts.
+
+Accuracy itself is intact (±1–3 items) — which is exactly why capability benchmarks score this model fine while the interface contract is broken backwards. The community's anecdote ("subtle degradation") now has a measured signature: **capability preserved, dial inverted.** This is the failure class LadderBench was built for and no leaderboard measures.
+
+> [!note] Sample-size caveat
+> 68 deterministic probes; the accuracy axis moves by 1–3 items across levels (treat ρ_acc as suggestive), while the token inversion (−31.5t at xhigh vs base, plus self-inversion) is large and directionally unambiguous.
+
 ## Quickstart
 
 ```bash

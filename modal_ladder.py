@@ -438,7 +438,9 @@ def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
     plt.close(fig)
 
     (Path(CACHE) / "reports").mkdir(parents=True, exist_ok=True)
-    (Path(CACHE) / "reports" / f"{model_key}.json").write_text(
+    # hf:repo/ids contain '/' and ':' — flatten for the filesystem
+    safe_key = model_key.replace(":", "_").replace("/", "__")
+    (Path(CACHE) / "reports" / f"{safe_key}.json").write_text(
         json.dumps(report, indent=2), encoding="utf-8")
     vol.commit()
     return {"report": report, "plot_b64": base64.b64encode(buf.getvalue()).decode()}
