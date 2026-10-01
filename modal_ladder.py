@@ -558,7 +558,7 @@ grpo_image = (
 )
 
 
-@app.function(image=grpo_image, gpu=GPU, volumes={CACHE: vol}, timeout=21600)
+@app.function(image=grpo_image, gpu=GPU, volumes={CACHE: vol}, timeout=43200)
 def run_grpo(smoke: bool = False, steps: int = 0, max_prompts: int = 0,
              effort: str = "medium", group_n: int = 4,
              lambda_think: float = 0.3, use_vllm: bool = False) -> dict:

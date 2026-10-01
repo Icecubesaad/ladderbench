@@ -72,6 +72,9 @@ The follow-up run scaled the task core from 56 → **500 correctness-filtered in
 | Base | 0.882 / 65t | 0.882 / 48t | 0.897 / 45t | — | flat |
 | **Arm 1 — outcome-only SFT (5,500 rows)** | **0.926 / 56t** | 0.882 / 47t | **0.956 / 44t** | **+1.00** | **healthy** |
 | **Arm 2 — reasoning-mixed SFT (2,600 rows)** | 0.912 / 54t | 0.882 / 48.5t | 0.912 / 49t | +0.50 | **healthy** |
+| **Arm 4 — GRPO / LadderRL (180 steps, verifiable reward)** | 0.897 / 60t | 0.882 / 47.5t | 0.897 / 45t | +0.97 | **healthy** |
+
+**Four training methods, zero dial failures.** SFT in both compositions, outcome-only at 4× volume, and now GRPO with an effort-economy reward — every arm kept the dial intact; every arm matched or beat base accuracy at xhigh with equal-or-fewer thinking tokens.
 
 **Both compositions survived.** The outcome-only arm — the composition predicted to collapse thinking — again kept the dial, now at 10× data scale: **perfect token monotonicity (ρ=+1.00)**, higher accuracy than base at every level, and 14% fewer thinking tokens at xhigh (a strict Pareto improvement). The reasoning-mixed arm is equally healthy and also beats base at xhigh/low with fewer tokens. Training entropy collapsed to 0.009 on arm1 and stayed at 0.046 on arm2 (reasoning targets retain variance — train_loss 0.068 vs 0.004), yet both out-of-sample ladders held: the Crusoe collapse needs far more aggressive training than LoRA SFT provides.
 
@@ -118,8 +121,20 @@ The follow-up that decides the headline: arm3 = the collapse-risk composition (z
 | arm1 (outcome 1×) | 0.60 | 0.65 | 0.65 |
 | arm2 (reasoning-mixed) | **1.00** | 0.80 | 0.65 |
 | arm3 (outcome 4×) | 0.65 | 0.60 | **0.45** |
+| grpo (LadderRL, 180 steps) | 0.60 | 0.55 | 0.70 |
 
 Three-way conclusion: (1) LoRA-scale SFT does not collapse the effort dial at any tested volume or composition; (2) the 6% low-effort thinning marks where to look next (higher epochs, higher rank, full fine-tuning); (3) **composition matched to task is the dominant lever for recovery quality** — arm2's win is the study's strongest practical result, and arm3's 0.45 is its cautionary tale.
+
+## The LadderRL arm: GRPO with a verifiable effort-economy reward
+
+The RL leg of the matrix: TRL GRPOTrainer, 180 steps × 4 rollouts on 560 incident prompts (71 min on H200, ~$4), reward = class match + gated recovery + format − λ·thinking-penalty (λ=0.3, reference 800 tokens) — the "answer right, think economically" pressure, scored by an oracle instead of a judge.
+
+**Results:**
+- **Dial: HEALTHY** (ρ=+0.97 token monotonicity) — a fourth method preserving the ladder, with xhigh accuracy +1.5pts over base at 8% fewer thinking tokens.
+- **Reward rose ~1.44 → ~1.49** across training — climbing toward the 1.6 ceiling mostly by compressing wasted thinking, the intended mechanism.
+- **Honest floor effect:** held-out recovery validity (0.60/0.55/0.70) did *not* beat base — the synthetic training instances carry explicit observability hints, so the reward was already near-saturated and couldn't differentiate recovery quality. **Design lesson for v2 of the harness: reward must come from harder episodes (live tool loops, hidden faults) where correctness isn't nearly free** — which is exactly the kind cluster's job.
+
+Method matrix verdict after four arms: *no training method we tested breaks the effort dial at this scale* — and the interesting failures (ThinkingCap's inverted dial) come from elsewhere.
 
 ## External validation: LadderBench flags ThinkingCap — DEGRADED
 

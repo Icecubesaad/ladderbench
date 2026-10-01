@@ -48,7 +48,7 @@ def train(cache: str = "/cache", model_id: str = "", smoke: bool = False,
     from ladderbench.datafactory import SYSTEM_GEN, build_instances
     from ladder_rl.reward import RewardConfig, completion_reward
 
-    p = SMOKE if smoke else GRPOParams
+    p = SMOKE if smoke else GRPOParams()
     if overrides:
         from dataclasses import replace
         p = replace(p, **{k: v for k, v in overrides.items()
@@ -118,6 +118,9 @@ def train(cache: str = "/cache", model_id: str = "", smoke: bool = False,
         chat_template_kwargs={"reasoning_effort": p.effort},
         beta=0.0,  # no KL-vs-ref: keeps the ref-model copy out of VRAM
         use_vllm=p.use_vllm,
+        vllm_gpu_memory_utilization=0.4,  # colocated rollout engine budget
+        vllm_max_model_length=4096,  # prompts ~500 + completion 1536; never
+                                     # size KV for Qwen's 262K context here
         seed=p.seed,
     )
     trainer = GRPOTrainer(
