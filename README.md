@@ -63,7 +63,7 @@ What the numbers say so far: (1) the effort dial survives small-scale LoRA fine-
 
 ## v2 — the scale-up: 10× task data + 5,000 real-world grounding rows
 
-The follow-up run scaled the task core from 56 → **500 correctness-filtered instances** (565 generated, self-rejection-sampled) and added **5,000 rows from a 100k Apache-2.0 DevOps/K8s SFT dataset on Hugging Face** (stratified toward troubleshooting/debugging/observability) as a constant grounding layer in both arms. H200, single epoch, LoRA r=16.
+The follow-up run scaled the task core from 56 → **500 correctness-filtered instances** (565 generated, self-rejection-sampled) and added **5,000 rows from [`stindardlogic/devops-kubernetes-sft-100k`](https://huggingface.co/datasets/stindardlogic/devops-kubernetes-sft-100k)**, a 100k Apache-2.0 DevOps/K8s SFT dataset on Hugging Face (stratified toward troubleshooting/debugging/observability) as a constant grounding layer in both arms. H200, single epoch, LoRA r=16.
 
 **Ladder scores (accuracy / median thinking tokens):**
 
