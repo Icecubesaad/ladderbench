@@ -168,6 +168,32 @@ Accuracy itself is intact (±1–3 items) — which is exactly why capability be
   held-out incidents, solo unfunded project — no independent replication
   yet. Treat this as a tool plus early results, not a definitive study.
 
+## The extended probe set: 108 probes, and the harder tier widens the signal
+
+Following review feedback ("token counts of 34-65 under-stress the dial"), we added `hard@v1` — 40 hand-verified multi-step problems (number theory, combinatorics, sequences) — for an **extended 108-probe set**, and re-scored every checkpoint on the current workspace.
+
+**Extended set (accuracy / median thinking tokens):**
+
+| Checkpoint | xhigh | medium | low | Verdict |
+|---|---|---|---|---|
+| Base | 0.935 / 72t | 0.917 / 59.5t | 0.926 / 54.5t | healthy |
+| arm3 (outcome 4x) | **0.944 / 70t** | 0.926 / 58.5t | **0.963 / 51.5t** | healthy |
+| grpo (LadderRL) | 0.926 / 70t | 0.917 / 59t | 0.926 / 55.5t | healthy |
+| **ThinkingCap** | 0.917 / **40.5t** | 0.935 / 49t | 0.954 / 50t | **DEGRADED** |
+
+- **The harder tier widens the dial's dynamic range**: base thinking tokens now span 72 -> 54.5 across the ladder (vs 65 -> 45 on core), and every per-tier accuracy is 0.92+ — the "too easy" critique is answered.
+- **The ThinkingCap inversion replicates on the harder tier**: 40.5 tokens at xhigh vs 50 at low, while base/arm3/grpo all think *more* at xhigh. Two probe sets, same backwards signature.
+- **arm3 is the best checkpoint measured anywhere in this study** (0.963 at low effort, CI 0.926-0.991).
+- *(arm1/arm2 extended scores pending — their checkpoints live on a retired workspace; their core-set HEALTHY verdicts stand.)*
+
+## The adversarial control: we tried to break the dial on purpose. It held.
+
+Claude's review asked for a known-positive: a deliberately broken model the benchmark must flag. We built one — 2,120 training rows that *explicitly teach the backwards mapping* (xhigh-effort contexts paired with empty-think targets, low-effort contexts paired with ~1,100-char think targets), LoRA, 1 epoch. If effort-conditioned thinking is learnable from fine-tuning, this should invert the dial.
+
+**The attack failed.** The scored dial came back **HEALTHY** (rho=+0.87; tokens 68 / 59.5 / 59.5 — still monotonic), and probe-time traces ignored the inverted conditioning entirely.
+
+This is the study's most important negative result: **the effort->thinking mapping is deeply wired by the base model's post-training — shallow adversarial fine-tuning cannot flip it.** It upgrades the robustness claim from "we didn't happen to break it" to "we *tried* to break it and couldn't, at this scale." The flip side is stated plainly: the benchmark's sensitivity is so far demonstrated by one natural positive (ThinkingCap); a constructed positive likely requires full fine-tuning or far more adversarial data — and finding the boundary where the attack *does* land is the open question for the B300 windows.
+
 ## Quickstart
 
 ```bash
