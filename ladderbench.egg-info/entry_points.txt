@@ -1,0 +1,2 @@
+[console_scripts]
+ladderbench = ladderbench.cli:main

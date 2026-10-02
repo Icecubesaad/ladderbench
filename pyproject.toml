@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ladderbench"
+version = "0.1.0"
+description = "Measure whether your fine-tune broke the reasoning-effort dial of a hybrid thinking model"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "Icecubesaad" }]
+keywords = [
+    "llm",
+    "evaluation",
+    "fine-tuning",
+    "reasoning-effort",
+    "hybrid-thinking",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# core is stdlib-only by design: probing, metrics, verdicts, probe sets,
+# and the reward oracle all run with zero dependencies
+dependencies = []
+
+[project.optional-dependencies]
+score = ["requests>=2.28"]          # HTTP probing of OpenAI-compatible endpoints
+plot = ["matplotlib>=3.7"]          # ladder plot rendering
+sandbox = ["pyyaml>=6.0"]           # Chaos Mesh scenario rendering
+all = ["requests>=2.28", "matplotlib>=3.7", "pyyaml>=6.0"]
+
+[project.scripts]
+ladderbench = "ladderbench.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Icecubesaad/ladderbench"
+Reports = "https://huggingface.co/icecubesaad/ladderbench"
+
+[tool.setuptools.packages.find]
+include = ["ladderbench*", "ladder_rl*"]
