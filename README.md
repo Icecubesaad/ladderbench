@@ -155,6 +155,19 @@ Accuracy itself is intact (±1–3 items) — which is exactly why capability be
 > [!note] Sample-size caveat
 > 68 deterministic probes; the accuracy axis moves by 1–3 items across levels (treat ρ_acc as suggestive), while the token inversion (−31.5t at xhigh vs base, plus self-inversion) is large and directionally unambiguous.
 
+## Limitations (read before citing)
+
+- **68-probe eval set** — one item moves accuracy by ~1.5%; checkpoint
+  differences of 1–3 items are within noise. The robust signals are the
+  *token* patterns (ThinkingCap's −31.5-token inversion at xhigh and its
+  self-inversion), not small accuracy deltas.
+- **Probe difficulty under-stresses the dial** — thinking-token magnitudes
+  (34–65) are small for a reasoning model on general Q&A. A harder probe
+  set would widen the dynamic range; planned.
+- **Single model family** (Qwen3.8-27B), single seed per run, n=20
+  held-out incidents, solo unfunded project — no independent replication
+  yet. Treat this as a tool plus early results, not a definitive study.
+
 ## Quickstart
 
 ```bash
