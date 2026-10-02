@@ -140,6 +140,70 @@ def build_direct_cli(arm: str = "arm3", per_class: int = 140,
                      indent=2))
 
 
+BOILER_THINK = (
+    "Let me work through this report carefully. First, I identify the failing "
+    "component from the symptoms and telemetry lines. Then I check the most "
+    "common causes for this class of failure, eliminate the ones contradicted "
+    "by the evidence, and verify the remaining hypothesis against every "
+    "observation in the report. Once the mechanism is clear I pick the single "
+    "recovery action that addresses the root cause directly, and I state it. "
+) * 4  # ~1,100 chars of generic visible reasoning
+
+
+@app.function(image=train_image, volumes={CACHE: vol}, timeout=1200)
+def build_inverted_arm(arm: str = "arminv", per_class: int = 40,
+                       grounding_n: int = 1000) -> dict:
+    """Known-positive control, constructed to break the dial: pairs where the
+    xhigh-effort context gets an EMPTY think target and the low-effort context
+    gets a LONG think target. Training on this teaches the effort->thinking
+    mapping backwards — LadderBench must flag the result as DEGRADED, or the
+    benchmark is not sensitive enough to trust."""
+    from transformers import AutoTokenizer
+
+    from ladderbench.datafactory import (
+        SYSTEM_GEN, build_instances, direct_answer, render_training_text,
+    )
+    from ladderbench.hfdata import load_sft100k_grounding
+
+    tok = AutoTokenizer.from_pretrained(MODEL_ID)
+    instances = build_instances(seed=SEED, per_class=per_class)
+
+    def render(inst, effort, assistant):
+        msgs = [{"role": "system", "content": SYSTEM_GEN},
+                {"role": "user", "content": inst["question"]},
+                {"role": "assistant", "content": assistant}]
+        return {"text": tok.apply_chat_template(msgs, tokenize=False,
+                                                reasoning_effort=effort)}
+
+    rows = []
+    for inst in instances:
+        rows.append(render(inst, "xhigh", direct_answer(inst)))   # xhigh -> no think
+        rows.append(render(inst, "low",                           # low -> long think
+                           "Let me think this through carefully. " +
+                           BOILER_THINK + direct_answer(inst)))
+    raw_ground, gstats = load_sft100k_grounding(grounding_n)
+    for r in raw_ground:
+        rows.append({"text": tok.apply_chat_template(
+            [{"role": "user", "content": r["user"]},
+             {"role": "assistant", "content": r["assistant"]}], tokenize=False)})
+
+    (Path(CACHE) / "data").mkdir(parents=True, exist_ok=True)
+    with open(Path(CACHE) / "data" / f"{arm}.jsonl", "w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+    vol.commit()
+    return {"arm": arm, "task_rows": len(instances) * 2,
+            "grounding_rows": len(raw_ground), "total": len(rows),
+            "grounding_stats": gstats}
+
+
+@app.local_entrypoint()
+def build_inverted_cli(arm: str = "arminv", per_class: int = 40,
+                       grounding_n: int = 1000):
+    print(json.dumps(build_inverted_arm.remote(arm, per_class, grounding_n),
+                     indent=2))
+
+
 # -------------------------------------------------------- data generation ----
 
 
@@ -348,7 +412,8 @@ def train_cli(arm: str, epochs: int = 3, max_rows: int = 0):
 
 
 @app.function(image=score_image, gpu=GPU, volumes={CACHE: vol}, timeout=7200)
-def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
+def score_model(model_key: str, base_key: str = "", hf_token: str = "",
+                probe_set: str = "all") -> dict:
     import io
     import os
 
@@ -372,7 +437,7 @@ def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
             return key[3:]  # any HF repo id, e.g. the ThinkingCap control
         return MODEL_ID if key == "base" else f"{CACHE}/checkpoints/{key}"
 
-    problems = load_probe_set("all")
+    problems = load_probe_set(probe_set)
     messages = [[
         {"role": "system", "content": "Answer the problem. End with the final "
          "numeric answer on its own, formatted as: The answer is N"},
@@ -413,7 +478,8 @@ def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
 
     analysis = analyze(levels, DEFAULT_LEVELS,
                        base=base_report["summary"] if base_report else None)
-    report = build_report(model_key, "vllm-offline", f"all@{probe_set_version('core')}",
+    report = build_report(model_key, "vllm-offline",
+                          f"{probe_set}@{probe_set_version('core')}",
                           levels, analysis, DEFAULT_LEVELS)
 
     # ladder plot -> png bytes
@@ -448,8 +514,8 @@ def score_model(model_key: str, base_key: str = "", hf_token: str = "") -> dict:
 
 @app.local_entrypoint()
 def score_cli(model_key: str, base: str = "", out: str = "out/run.json",
-              hf_token: str = ""):
-    result = score_model.remote(model_key, base, hf_token)
+              hf_token: str = "", probe_set: str = "all"):
+    result = score_model.remote(model_key, base, hf_token, probe_set)
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result["report"], indent=2), encoding="utf-8")

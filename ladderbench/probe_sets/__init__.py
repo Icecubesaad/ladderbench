@@ -24,29 +24,33 @@ def probe_set_version(name: str) -> str:
     return VERSIONS.get(name, "v0")
 
 
-VERSIONS = {"core": "v1", "incidents": "v0-static"}
+VERSIONS = {"core": "v1", "incidents": "v0-static", "hard": "v1",
+            "extended": "v1"}
 
 CORE_SIZE_TARGET = 60
 
 
 def load_probe_set(name: str) -> list[Probe]:
-    """Load a probe set by name. Known: core, incidents, all."""
+    """Load a probe set by name. Known: core, hard, incidents, extended, all."""
     from .core import PROBES as CORE
+    from .hardcore import PROBES as HARD
     from .incidents import PROBES as INCIDENTS
 
-    sets = {"core": CORE, "incidents": INCIDENTS}
+    sets = {"core": CORE, "hard": HARD, "incidents": INCIDENTS}
+    if name == "extended":
+        return CORE + HARD + INCIDENTS
     if name == "all":
         return CORE + INCIDENTS
     if name not in sets:
         raise SystemExit(
-            f"unknown probe set '{name}'. known: core, incidents, all"
-        )
+            f"unknown probe set '{name}'. known: core, hard, incidents, "
+            f"extended, all")
     return list(sets[name])
 
 
 def describe() -> str:
     lines = []
-    for name in ("core", "incidents"):
+    for name in ("core", "hard", "incidents"):
         n = len(load_probe_set(name))
         lines.append(f"  {name:<12} {n:>4} probes  ({VERSIONS[name]})")
     return "\n".join(lines)
