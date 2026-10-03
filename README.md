@@ -183,7 +183,7 @@ Following review feedback ("token counts of 34-65 under-stress the dial"), we ad
 
 - **The harder tier widens the dial's dynamic range**: base thinking tokens now span 72 -> 54.5 across the ladder (vs 65 -> 45 on core), and every per-tier accuracy is 0.92+ — the "too easy" critique is answered.
 - **The ThinkingCap inversion replicates on the harder tier**: 40.5 tokens at xhigh vs 50 at low, while base/arm3/grpo all think *more* at xhigh. Two probe sets, same backwards signature.
-- **arm3 is the best checkpoint measured anywhere in this study** (0.963 at low effort, CI 0.926-0.991).
+- **arm3 posts the study's highest cell** (0.963 at low effort) — but paired McNemar tests against base are *not* separated at n=108 (5 gains / 1 loss, p=0.22): the general tiers are at ceiling (0.92-1.00 for every checkpoint), so accuracy in this study supports *parity with base*, not checkpoint ranking. The load-bearing signal is the token axis. Ranking-level accuracy claims require a harder probe tier where headroom exists below the ceiling.
 - *(arm1/arm2 extended scores pending — their checkpoints live on a retired workspace; their core-set HEALTHY verdicts stand.)*
 
 ## The adversarial control: we tried to break the dial on purpose. It held.
