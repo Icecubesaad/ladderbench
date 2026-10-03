@@ -122,7 +122,14 @@ class EndpointClient:
     def _parse(body: dict) -> dict:
         msg = body["choices"][0]["message"]
         content = msg.get("content") or ""
-        reasoning = msg.get("reasoning_content") or ""
+        # server conventions differ: vLLM = reasoning_content, Ollama/DeepSeek
+        # compat = reasoning (str or list of segments), else  blocks
+        reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
+        if isinstance(reasoning, list):
+            parts = []
+            for seg in reasoning:
+                parts.append(seg.get("text", "") if isinstance(seg, dict) else str(seg))
+            reasoning = "".join(parts)
         if not reasoning:
             m = _THINK.search(content) or _THINK_OPEN.search(content)
             reasoning = m.group(1) if m else ""
